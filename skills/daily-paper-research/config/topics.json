@@ -30,6 +30,11 @@
   "daily_report_top_n": 12,
   "domestic_sources": [
     {
+      "site": "xueshushijie",
+      "enabled": true,
+      "note": "public journal/pdf route source; preferred for low-friction fulltext capture"
+    },
+    {
       "site": "ncpssd",
       "enabled": true,
       "note": "browser-assisted source; currently integrated as planned source"

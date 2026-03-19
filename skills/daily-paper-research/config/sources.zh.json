@@ -9,6 +9,14 @@
       "notes": "已完成首版适配器，优先接入"
     },
     {
+      "key": "xueshushijie",
+      "label": "学术世界",
+      "status": "integrated-public-pdf",
+      "type": "browser-public-pdf",
+      "supports_fulltext": true,
+      "notes": "已确认未登录可从 journal 路由直接提取 PDF 直链，作为第二中文源接入"
+    },
+    {
       "key": "cnki",
       "label": "中国知网",
       "status": "planned",

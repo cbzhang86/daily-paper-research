@@ -188,9 +188,10 @@ def collect_domestic(topics: list[dict], top_n: int) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     ncpssd_user = os.getenv("NCPSSD_USERNAME", "")
     ncpssd_pass = os.getenv("NCPSSD_PASSWORD", "")
-    adapter = SKILL_DIR / "scripts" / "ncpssd_adapter.py"
+    ncpssd_adapter = SKILL_DIR / "scripts" / "ncpssd_adapter.py"
+    xueshushijie_adapter = SKILL_DIR / "scripts" / "xueshushijie_adapter.py"
 
-    if ncpssd_user and ncpssd_pass and adapter.exists():
+    if xueshushijie_adapter.exists():
         for topic in topics:
             kws = topic.get("domestic_keywords", [])[:1]
             for kw in kws:
@@ -198,7 +199,35 @@ def collect_domestic(topics: list[dict], top_n: int) -> list[dict[str, Any]]:
                     completed = subprocess.run(
                         [
                             sys.executable,
-                            str(adapter),
+                            str(xueshushijie_adapter),
+                            "--keyword", kw,
+                            "--limit", str(min(4, top_n)),
+                        ],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="ignore",
+                        timeout=240,
+                    )
+                    if completed.returncode == 0 and completed.stdout.strip():
+                        rows = json.loads(completed.stdout)
+                        for p in rows:
+                            p["_topic_key"] = topic["key"]
+                            p["_topic_label"] = topic["label"]
+                            p["_source_type"] = "domestic"
+                            results.append(p)
+                except Exception:
+                    pass
+
+    if ncpssd_user and ncpssd_pass and ncpssd_adapter.exists():
+        for topic in topics:
+            kws = topic.get("domestic_keywords", [])[:1]
+            for kw in kws:
+                try:
+                    completed = subprocess.run(
+                        [
+                            sys.executable,
+                            str(ncpssd_adapter),
                             "--keyword", kw,
                             "--limit", str(min(3, top_n)),
                             "--username", ncpssd_user,
@@ -222,13 +251,13 @@ def collect_domestic(topics: list[dict], top_n: int) -> list[dict[str, Any]]:
     if results:
         return results
 
-    # fallback placeholder when credentials or site run not available
+    # fallback placeholder when site runs are not available
     for topic in topics:
         for kw in topic.get("domestic_keywords", [])[:1]:
             results.append({
                 "title": f"[待接入国内站点抓取] {kw}",
                 "authors": [],
-                "abstract": "国内真实源接口已预留；未提供可用登录态/账号时先输出占位。",
+                "abstract": "国内真实源接口已预留；当前环境未跑通浏览器适配时先输出占位。",
                 "year": None,
                 "doi": "",
                 "url": "",
