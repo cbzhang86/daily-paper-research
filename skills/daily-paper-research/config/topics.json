@@ -1,0 +1,38 @@
+{
+  "topics": [
+    {
+      "key": "management",
+      "label": "管理学大类",
+      "keywords": ["management", "organizational management", "public management", "enterprise governance", "管理学", "组织管理", "公共管理", "企业治理"],
+      "domestic_keywords": ["管理学", "组织管理", "公共管理", "企业治理"]
+    },
+    {
+      "key": "social-security",
+      "label": "社会保障类",
+      "keywords": ["social security", "social welfare", "pension policy", "health insurance policy", "社会保障", "社会福利", "养老保险", "医疗保障"],
+      "domestic_keywords": ["社会保障", "社会福利", "养老保险", "医疗保障"]
+    },
+    {
+      "key": "minors",
+      "label": "未成年人研究类",
+      "keywords": ["minors", "adolescent development", "child protection", "juvenile policy", "未成年人", "青少年发展", "儿童保护", "未成年人保护"],
+      "domestic_keywords": ["未成年人", "青少年发展", "儿童保护", "未成年人保护"]
+    },
+    {
+      "key": "aging",
+      "label": "老龄化研究类",
+      "keywords": ["aging", "population aging", "elderly care", "active aging", "老龄化", "人口老龄化", "养老服务", "积极老龄化"],
+      "domestic_keywords": ["老龄化", "人口老龄化", "养老服务", "积极老龄化"]
+    }
+  ],
+  "international_top_n": 12,
+  "domestic_top_n": 8,
+  "daily_report_top_n": 12,
+  "domestic_sources": [
+    {
+      "site": "ncpssd",
+      "enabled": true,
+      "note": "browser-assisted source; currently integrated as planned source"
+    }
+  ]
+}

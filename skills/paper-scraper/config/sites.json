@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "total_patterns": 0,
+    "created": "2026-03-19",
+    "last_updated": "2026-03-19T08:44:48.329248"
+  },
+  "arxiv.org": {
+    "extractor": "from_arxiv",
+    "mode": "search",
+    "session_type": "http",
+    "selectors_hint": "auto-detected",
+    "last_success": "2026-03-19T08:44:48.329248",
+    "success_count": 1
+  }
+}
