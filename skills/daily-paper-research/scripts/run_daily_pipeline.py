@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections import Counter, defaultdict
+import subprocess
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
@@ -38,6 +40,14 @@ class NormalizedPaper:
     language: str
     collection_type: str
     raw_keywords: list[str]
+    institution: str = ""
+    subject_classification: str = ""
+    pages: str = ""
+    fulltext_available: bool = False
+    research_object: str = ""
+    method_guess: str = ""
+    policy_signal: str = ""
+    data_signal: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -72,6 +82,53 @@ def infer_collection_type(title: str, abstract: str, venue: str) -> str:
     return "general"
 
 
+def derive_fine_fields(title: str, abstract: str, venue: str, institution: str = "") -> dict[str, str]:
+    text = f"{title} {abstract} {venue} {institution}".lower()
+    method_guess = ""
+    for kw, label in [
+        ("difference-in-differences", "DID/政策评估"),
+        ("did", "DID/政策评估"),
+        ("panel", "面板数据分析"),
+        ("regression", "回归分析"),
+        ("structural equation", "结构方程"),
+        ("survey", "问卷/调查研究"),
+        ("case study", "案例研究"),
+        ("meta-analysis", "元分析"),
+        ("回归", "回归分析"),
+        ("面板", "面板数据分析"),
+        ("问卷", "问卷/调查研究"),
+        ("案例研究", "案例研究"),
+        ("元分析", "元分析"),
+        ("结构方程", "结构方程"),
+    ]:
+        if kw in text:
+            method_guess = label
+            break
+
+    research_object = ""
+    for kw, label in [
+        ("elderly", "老年群体"), ("older adults", "老年群体"), ("aging", "老龄化群体"),
+        ("adolescent", "青少年/未成年人"), ("minor", "未成年人"), ("children", "儿童群体"),
+        ("farmer", "农民群体"), ("resident", "居民群体"), ("enterprise", "企业/组织"),
+        ("老年", "老年群体"), ("老龄", "老龄化群体"), ("未成年人", "未成年人"),
+        ("青少年", "青少年/未成年人"), ("儿童", "儿童群体"), ("农民", "农民群体"),
+        ("居民", "居民群体"), ("企业", "企业/组织"), ("组织", "企业/组织"),
+    ]:
+        if kw in text:
+            research_object = label
+            break
+
+    policy_signal = "高" if any(k in text for k in ["policy", "governance", "制度", "政策", "治理", "保障机制", "法律"]) else "中" if any(k in text for k in ["public", "service", "welfare", "养老服务"]) else "低"
+    data_signal = "明确" if any(k in text for k in ["cgss", "cfps", "clhls", "panel", "survey", "问卷", "数据库", "样本"]) else "待识别"
+
+    return {
+        "research_object": research_object,
+        "method_guess": method_guess,
+        "policy_signal": policy_signal,
+        "data_signal": data_signal,
+    }
+
+
 def summarize_paper(p: dict[str, Any]) -> dict[str, Any]:
     abstract = norm_text(p.get("abstract", ""))
     title = norm_text(p.get("title", ""))
@@ -104,6 +161,11 @@ def summarize_paper(p: dict[str, Any]) -> dict[str, Any]:
         "themes": themes,
         "collection_type": p.get("collection_type", "general"),
         "why_relevant": f"与{', '.join(p.get('topic_labels', []))}相关" if p.get("topic_labels") else "主题相关",
+        "research_object": p.get("research_object", ""),
+        "method_guess": p.get("method_guess", ""),
+        "policy_signal": p.get("policy_signal", ""),
+        "data_signal": p.get("data_signal", ""),
+        "fulltext_available": p.get("fulltext_available", False),
     }
 
 
@@ -122,18 +184,51 @@ async def collect_international(topics: list[dict], top_n: int) -> list[dict[str
     return results
 
 
-def collect_domestic_stub(topics: list[dict], top_n: int) -> list[dict[str, Any]]:
-    """Domestic collection placeholder.
-    Current version only reserves the interface and metadata contract.
-    Real site-specific jobs (ncpssd/CNKI/etc.) can be plugged in incrementally.
-    """
+def collect_domestic(topics: list[dict], top_n: int) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
+    ncpssd_user = os.getenv("NCPSSD_USERNAME", "")
+    ncpssd_pass = os.getenv("NCPSSD_PASSWORD", "")
+    adapter = SKILL_DIR / "scripts" / "ncpssd_adapter.py"
+
+    if ncpssd_user and ncpssd_pass and adapter.exists():
+        for topic in topics:
+            kws = topic.get("domestic_keywords", [])[:1]
+            for kw in kws:
+                try:
+                    completed = subprocess.run(
+                        [
+                            sys.executable,
+                            str(adapter),
+                            "--keyword", kw,
+                            "--limit", str(min(3, top_n)),
+                            "--username", ncpssd_user,
+                            "--password", ncpssd_pass,
+                        ],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="ignore",
+                        timeout=180,
+                    )
+                    if completed.returncode == 0 and completed.stdout.strip():
+                        rows = json.loads(completed.stdout)
+                        for p in rows:
+                            p["_topic_key"] = topic["key"]
+                            p["_topic_label"] = topic["label"]
+                            p["_source_type"] = "domestic"
+                            results.append(p)
+                except Exception:
+                    pass
+    if results:
+        return results
+
+    # fallback placeholder when credentials or site run not available
     for topic in topics:
         for kw in topic.get("domestic_keywords", [])[:1]:
             results.append({
                 "title": f"[待接入国内站点抓取] {kw}",
                 "authors": [],
-                "abstract": f"该主题已为国内来源保留抓取任务入口，后续将接入 ncpssd / 知网 / 万方 等真实结果。",
+                "abstract": "国内真实源接口已预留；未提供可用登录态/账号时先输出占位。",
                 "year": None,
                 "doi": "",
                 "url": "",
@@ -144,6 +239,7 @@ def collect_domestic_stub(topics: list[dict], top_n: int) -> list[dict[str, Any]
                 "_topic_key": topic["key"],
                 "_topic_label": topic["label"],
                 "_source_type": "domestic-plan",
+                "fulltext_available": False,
             })
     return results[: max(1, top_n // 2)]
 
@@ -166,6 +262,7 @@ def normalize_papers(raw_papers: list[dict[str, Any]]) -> list[NormalizedPaper]:
         citations = p.get("citation_count", p.get("citations"))
         year = p.get("year") if isinstance(p.get("year"), int) else None
 
+        fine_fields = derive_fine_fields(title, abstract, venue, p.get("institution", ""))
         if key not in merged:
             merged[key] = NormalizedPaper(
                 title=title,
@@ -182,7 +279,15 @@ def normalize_papers(raw_papers: list[dict[str, Any]]) -> list[NormalizedPaper]:
                 topic_labels=[p.get("_topic_label", "")],
                 language=guess_language(f"{title} {abstract}"),
                 collection_type=infer_collection_type(title, abstract, venue),
-                raw_keywords=[]
+                raw_keywords=p.get("keywords", []) if isinstance(p.get("keywords", []), list) else [],
+                institution=norm_text(p.get("institution", "")),
+                subject_classification=norm_text(p.get("subject_classification", "")),
+                pages=norm_text(p.get("pages", "")),
+                fulltext_available=bool(p.get("fulltext_available") or p.get("pdf_url") or p.get("download_url")),
+                research_object=fine_fields["research_object"],
+                method_guess=fine_fields["method_guess"],
+                policy_signal=fine_fields["policy_signal"],
+                data_signal=fine_fields["data_signal"],
             )
         else:
             item = merged[key]
@@ -196,6 +301,13 @@ def normalize_papers(raw_papers: list[dict[str, Any]]) -> list[NormalizedPaper]:
                 item.url = url
             if not item.venue and venue:
                 item.venue = venue
+            if not item.institution and p.get("institution"):
+                item.institution = norm_text(p.get("institution", ""))
+            if not item.subject_classification and p.get("subject_classification"):
+                item.subject_classification = norm_text(p.get("subject_classification", ""))
+            if not item.pages and p.get("pages"):
+                item.pages = norm_text(p.get("pages", ""))
+            item.fulltext_available = item.fulltext_available or bool(p.get("fulltext_available") or p.get("pdf_url") or p.get("download_url"))
             if (citations or 0) > (item.citations or 0):
                 item.citations = citations if isinstance(citations, int) else item.citations
     return list(merged.values())
@@ -223,10 +335,17 @@ def build_analysis(papers: list[NormalizedPaper], report_top_n: int) -> dict[str
     if not any(p.collection_type == "policy" for p in papers):
         gaps.append("政策型论文占比偏低，可增加政策评估、制度设计、治理研究相关检索词。")
 
+    fine_stats = {
+        "fulltext_count": sum(1 for p in papers if p.fulltext_available),
+        "policy_high_count": sum(1 for p in papers if p.policy_signal == "高"),
+        "empirical_like_count": sum(1 for p in papers if p.method_guess),
+    }
+
     writing_assets = {
         "candidate_review_papers": [p.title for p in selected if p.collection_type == "review"][:5],
         "candidate_policy_papers": [p.title for p in selected if p.collection_type == "policy"][:5],
-        "candidate_empirical_papers": [p.title for p in selected if p.collection_type == "empirical"][:5],
+        "candidate_empirical_papers": [p.title for p in selected if p.collection_type == "empirical" or p.method_guess][:5],
+        "fulltext_candidates": [p.title for p in selected if p.fulltext_available][:8],
     }
 
     return {
@@ -235,6 +354,7 @@ def build_analysis(papers: list[NormalizedPaper], report_top_n: int) -> dict[str
         "topic_distribution": dict(topic_counter),
         "method_trends": dict(method_counter.most_common(12)),
         "type_distribution": dict(type_counter),
+        "fine_stats": fine_stats,
         "research_gaps": gaps,
         "writing_assets": writing_assets,
     }
@@ -256,11 +376,21 @@ def render_report(date_str: str, papers: list[NormalizedPaper], analysis: dict[s
         lines.append(f"- 年份：{year}")
         lines.append(f"- 来源：{venue}")
         lines.append(f"- 主题：{', '.join(p.get('topic_labels', []))}")
+        if p.get("institution"):
+            lines.append(f"- 机构：{p['institution']}")
+        if p.get("method_guess"):
+            lines.append(f"- 方法判断：{p['method_guess']}")
+        if p.get("research_object"):
+            lines.append(f"- 研究对象：{p['research_object']}")
+        lines.append(f"- 政策相关度：{p.get('policy_signal', '')}")
+        lines.append(f"- 原文可达：{'是' if p.get('fulltext_available') else '否'}")
         if p.get("abstract"):
             abstract = p['abstract'][:240] + ('...' if len(p['abstract']) > 240 else '')
             lines.append(f"- 摘要：{abstract}")
         if p.get("url"):
             lines.append(f"- 链接：{p['url']}")
+        if p.get("pdf_url"):
+            lines.append(f"- 原文/下载：{p['pdf_url']}")
         lines.append("")
 
     lines.append("## 三、主题观察")
@@ -313,7 +443,7 @@ async def main() -> None:
     if not args.skip_international:
         raw_collected.extend(await collect_international(topics, cfg.get("international_top_n", args.limit_per_topic)))
     if not args.skip_domestic:
-        raw_collected.extend(collect_domestic_stub(topics, cfg.get("domestic_top_n", 6)))
+        raw_collected.extend(collect_domestic(topics, cfg.get("domestic_top_n", 6)))
 
     normalized = normalize_papers(raw_collected)
     analysis = build_analysis(normalized, cfg.get("daily_report_top_n", 12))

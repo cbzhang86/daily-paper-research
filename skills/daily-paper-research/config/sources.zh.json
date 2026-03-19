@@ -1,0 +1,44 @@
+{
+  "sources": [
+    {
+      "key": "ncpssd",
+      "label": "国家哲学社会科学文献中心",
+      "status": "integrated-first-pass",
+      "type": "browser-login-detail",
+      "supports_fulltext": true,
+      "notes": "已完成首版适配器，优先接入"
+    },
+    {
+      "key": "cnki",
+      "label": "中国知网",
+      "status": "planned",
+      "type": "browser-login-heavy",
+      "supports_fulltext": true,
+      "notes": "风控较强，后续单独适配"
+    },
+    {
+      "key": "wanfang",
+      "label": "万方数据",
+      "status": "planned",
+      "type": "browser-dynamic",
+      "supports_fulltext": true,
+      "notes": "适合作为第二个接入目标"
+    },
+    {
+      "key": "cqvip",
+      "label": "维普",
+      "status": "planned",
+      "type": "browser-dynamic",
+      "supports_fulltext": true,
+      "notes": "后续补充"
+    },
+    {
+      "key": "baidu-xueshu",
+      "label": "百度学术",
+      "status": "planned",
+      "type": "search-aggregator",
+      "supports_fulltext": false,
+      "notes": "可作为发现层，不适合作为原文主源"
+    }
+  ]
+}
